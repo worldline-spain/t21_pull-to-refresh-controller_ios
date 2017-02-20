@@ -19,6 +19,9 @@
 
 - (void) startPullToRefreshAnimation;
 - (void) resetPullToRefreshAnimation;
+- (void) finishPullToRefreshAnimation;
+- (BOOL) isPullToRefreshAnimating;
+- (BOOL) hasPullToRefreshController;
 
 #pragma mark - Pull to refresh by code
 

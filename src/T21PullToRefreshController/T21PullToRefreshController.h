@@ -14,20 +14,23 @@
 
 #pragma mark - Add/Remove pull to refresh methods
 
-- (UIRefreshControl*) addPullToRefresh:(UIScrollView *)scrollView withRefreshBlock:(void (^)(void))refreshBlock;
-- (void) removePullToRefresh:(UIScrollView*)scrollView;
+-(UIRefreshControl*)addPullToRefresh:(UIScrollView *)scrollView withRefreshBlock:(void (^)(void))refreshBlock;
+-(void)removePullToRefresh:(UIScrollView*)scrollView;
 
 #pragma mark - Animation methods
 
-- (void) startPullToRefreshAnimation:(UIScrollView*)scrollView;
-- (void) resetPullToRefreshAnimation:(UIScrollView*)scrollView;
+-(void)startPullToRefreshAnimation:(UIScrollView*)scrollView;
+-(void)finishPullToRefreshAnimation:(UIScrollView*)scrollView;
+-(BOOL)isPullToRefreshAnimating:(UIScrollView*)scrollView;
+
+-(void)resetPullToRefreshAnimation:(UIScrollView*)scrollView __deprecated_msg("use finishPullToRefreshAnimation instead.");
 
 #pragma mark - Pull to refresh by code
 
-- (void) performPullToRefresh:(UIScrollView*)scrollView;
+-(void)performPullToRefresh:(UIScrollView*)scrollView;
 
 #pragma mark - Helper methods
 
-- (BOOL) hasPullToRefresh:(UIScrollView *)scrollView;
+-(BOOL)hasPullToRefresh:(UIScrollView *)scrollView;
 
 @end

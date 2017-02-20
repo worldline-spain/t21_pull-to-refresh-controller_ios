@@ -8,9 +8,16 @@
 
 #import "T21PullToRefreshController.h"
 
+@interface T21PullToRefreshControllerInternalState : NSObject
+
+@property (nonatomic) NSNumber * isAnimating;
+@property (nonatomic,copy) void (^refreshBlock)();
+
+@end
+
 @interface T21PullToRefreshController ()
 
-@property (nonatomic,strong) NSMapTable *refreshBlocks;
+@property (nonatomic,strong) NSMapTable *refreshStates;
 @property (nonatomic,strong) NSMapTable *refreshControls;
 
 @end
@@ -30,7 +37,7 @@
 {
     self = [super init];
     if (self) {
-        self.refreshBlocks = [NSMapTable weakToStrongObjectsMapTable];
+        self.refreshStates = [NSMapTable weakToStrongObjectsMapTable];
         self.refreshControls = [NSMapTable weakToWeakObjectsMapTable];
     }
     return self;
@@ -45,7 +52,10 @@
         refreshControl = [self createGenericRefreshControl];
         [scrollView addSubview:refreshControl];
         
-        [_refreshBlocks setObject:refreshBlock forKey:refreshControl];
+        T21PullToRefreshControllerInternalState * state = [[T21PullToRefreshControllerInternalState alloc] init];
+        state.refreshBlock = refreshBlock;
+        
+        [_refreshStates setObject:state forKey:refreshControl];
         [_refreshControls setObject:refreshControl forKey:scrollView];
     }
     return refreshControl;
@@ -55,7 +65,7 @@
 {
     UIRefreshControl *refreshControl = [_refreshControls objectForKey:scrollView];
     if (refreshControl) {
-        [_refreshBlocks removeObjectForKey:refreshControl];
+        [_refreshStates removeObjectForKey:refreshControl];
         [refreshControl removeFromSuperview];
         refreshControl = nil;
     }
@@ -65,6 +75,10 @@
 {
     UIRefreshControl *refreshControl = [[UIRefreshControl alloc] init];
     [refreshControl addTarget:self action:@selector(handleRefresh:) forControlEvents:UIControlEventValueChanged];
+    
+    //ios 10 fix:
+    refreshControl.backgroundColor = UIColor.clearColor;
+    
     return refreshControl;
 }
 
@@ -73,26 +87,64 @@
 - (void) startPullToRefreshAnimation:(UIScrollView*)scrollView
 {
     UIRefreshControl *refreshControl = [_refreshControls objectForKey:scrollView];
-    [self animateRefreshControl:refreshControl];
+    [self animateRefreshControl:refreshControl wasForced:YES];
 }
 
-- (void) resetPullToRefreshAnimation:(UIScrollView*)scrollView
-{
+- (void) finishPullToRefreshAnimation:(UIScrollView*)scrollView {
     UIRefreshControl *refreshControl = [_refreshControls objectForKey:scrollView];
-    if (refreshControl && refreshControl.refreshing) {
-        [refreshControl endRefreshing];
-    }
-}
-
-- (void) animateRefreshControl:(UIRefreshControl*)refreshControl
-{
-    if (refreshControl && !refreshControl.refreshing) {
-        UIScrollView *scrollView = (UIScrollView*)refreshControl.superview;
-        [refreshControl beginRefreshing];
-        if([scrollView isKindOfClass:[UIScrollView class]]){ //The beginRefreshing action doesn't scroll automatically to the refreshControl contentOffset
-            [scrollView setContentOffset:CGPointMake(0, -refreshControl.frame.size.height) animated:YES];
+    if (refreshControl) {
+        T21PullToRefreshControllerInternalState * state = [_refreshStates objectForKey:refreshControl];
+        if (state && state.isAnimating.boolValue) {
+            // ugly trick to ensure the refresh control has time to be shown
+            // we found some issues showing the refresh control even after the viewDidLoad and viewWillAppear methods.
+            dispatch_after(dispatch_time(DISPATCH_TIME_NOW, 0.2 * NSEC_PER_SEC), dispatch_get_main_queue(), ^{
+                state.isAnimating = @NO;
+                [refreshControl endRefreshing];
+            });
         }
     }
+}
+
+- (void) resetPullToRefreshAnimation:(UIScrollView*)scrollView //deprecated
+{
+    [self finishPullToRefreshAnimation:scrollView];
+}
+
+- (BOOL)isPullToRefreshAnimating:(UIScrollView*)scrollView {
+    UIRefreshControl *refreshControl = [_refreshControls objectForKey:scrollView];
+    if (refreshControl) {
+        T21PullToRefreshControllerInternalState * state = [_refreshStates objectForKey:refreshControl];
+        if (state) {
+            return state.isAnimating.boolValue;
+        }
+    }
+    return NO;
+}
+
+- (void) animateRefreshControl:(UIRefreshControl*)refreshControl wasForced:(BOOL)wasForced
+{
+    T21PullToRefreshControllerInternalState * state = [_refreshStates objectForKey:refreshControl];
+    // ugly trick to ensure the refresh control has time to be shown
+    // we found some issues showing the refresh control even after the viewDidLoad and viewWillAppear methods.
+    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, 0.2 * NSEC_PER_SEC), dispatch_get_main_queue(), ^{
+        if (state && !state.isAnimating.boolValue) {
+            state.isAnimating = @YES;
+            if (wasForced) {
+                UIScrollView *scrollView = (UIScrollView*)refreshControl.superview;
+                if([scrollView isKindOfClass:[UIScrollView class]]){
+                    // UIViewControllers manage automatically the inset calculation when a refresh control begins
+                    // (taking in account the status bar and navigation bar)
+                    // In order to get the exact height of the refreshControl we inspect the contentInset increment
+                    CGFloat prevInset = scrollView.contentInset.top;
+                    [refreshControl beginRefreshing];
+                    
+                    //The beginRefreshing action doesn't scroll automatically to the refreshControl contentOffset
+                    CGFloat currentInset = scrollView.contentInset.top;
+                    [scrollView setContentOffset:CGPointMake(scrollView.contentOffset.x, scrollView.contentOffset.y - fabs(currentInset - prevInset)) animated:YES];
+                }
+            }
+        }
+    });
 }
 
 #pragma mark - Pull to refresh by code
@@ -102,16 +154,16 @@
     UIRefreshControl *refreshControl = [_refreshControls objectForKey:scrollView];
     if (refreshControl)
     {
+        [self animateRefreshControl:refreshControl wasForced:YES];
         [self executeRefreshBlock:refreshControl];
     }
 }
 
 - (void) executeRefreshBlock:(UIRefreshControl*)refreshControl
 {
-    void(^refreshBlock)() = [_refreshBlocks objectForKey:refreshControl];
-    if (refreshBlock) {
-        [self animateRefreshControl:refreshControl];
-        refreshBlock();
+    T21PullToRefreshControllerInternalState * state = [_refreshStates objectForKey:refreshControl];
+    if (state) {
+        state.refreshBlock();
     }
 }
 
@@ -130,7 +182,27 @@
 
 - (void) handleRefresh:(UIRefreshControl*)refreshControl
 {
-    [self executeRefreshBlock:refreshControl];
+    T21PullToRefreshControllerInternalState * state = [_refreshStates objectForKey:refreshControl];
+    if (state) {
+        [self animateRefreshControl:refreshControl wasForced:NO];
+        [self executeRefreshBlock:refreshControl];
+    }
+}
+
+@end
+
+
+
+@implementation T21PullToRefreshControllerInternalState
+
+- (instancetype)init
+{
+    self = [super init];
+    if (self) {
+        self.isAnimating = @NO;
+        self.refreshBlock = nil;
+    }
+    return self;
 }
 
 @end

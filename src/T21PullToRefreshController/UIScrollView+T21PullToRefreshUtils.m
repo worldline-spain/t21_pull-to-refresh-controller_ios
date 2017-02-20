@@ -35,6 +35,18 @@
     [[T21PullToRefreshController getInstance] resetPullToRefreshAnimation:self];
 }
 
+- (void) finishPullToRefreshAnimation {
+    [[T21PullToRefreshController getInstance] finishPullToRefreshAnimation:self];
+}
+
+- (BOOL) isPullToRefreshAnimating {
+    [[T21PullToRefreshController getInstance] isPullToRefreshAnimating:self];
+}
+
+- (BOOL) hasPullToRefreshController {
+    [[T21PullToRefreshController getInstance] hasPullToRefresh:self];
+}
+
 #pragma mark - Pull to refresh by code
 
 - (void) performPullToRefresh

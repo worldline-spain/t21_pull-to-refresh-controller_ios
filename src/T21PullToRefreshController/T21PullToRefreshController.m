@@ -9,6 +9,7 @@
 #import "T21PullToRefreshController.h"
 
 typedef enum T21PullToRefreshOperationType {
+    T21PullToRefreshOperationTypeUnknown = -1,
     T21PullToRefreshOperationTypeShow = 0,
     T21PullToRefreshOperationTypeHide = 1
 }T21PullToRefreshOperationType;
@@ -31,6 +32,7 @@ typedef enum T21PullToRefreshOperationType {
 @property (nonatomic,copy) void (^refreshBlock)();
 @property (nonatomic) NSMutableArray * queue;
 @property (nonatomic,weak) UIRefreshControl *refreshControl;
+@property (nonatomic) T21PullToRefreshOperationType lastState;
 
 @end
 
@@ -210,39 +212,52 @@ typedef enum T21PullToRefreshOperationType {
         self.isAnimating = @NO;
         self.refreshBlock = nil;
         self.queue = [NSMutableArray array];
+        self.lastState = T21PullToRefreshOperationTypeUnknown;
     }
     return self;
 }
 
 -(void)addOperation:(T21PullToRefreshOperation*)newOperation {
     @synchronized (self) {
-        if (self.queue.count == 0) {
-            [self.queue addObject:newOperation];
-            [self executeOperation:newOperation];
-        } else {
-            T21PullToRefreshOperation * currentOperation = self.queue.firstObject;
-            if (self.queue.count == 1) {
-                // one action is already taking place: Show or Hide
-                // add if it's the opposite action
-                if (currentOperation.type != newOperation.type) {
-                    [self.queue addObject:newOperation];
-                }
+//        NSLog(@"ADD OPERATION STARTS");
+        if (newOperation.type != self.lastState) {
+            if (self.queue.count == 0) {
+                [self.queue addObject:newOperation];
+                [self executeOperation:newOperation];
             } else {
-                //more than one action in the queue: Hide,Show or Show,Hide
-                if (currentOperation.type == newOperation.type) {
-                    // remove the opposite action and do not add the new action, as it's the same
-                    // Hide,Show <- Hide === Hide
-                    [self.queue removeObjectAtIndex:1];
+                T21PullToRefreshOperation * currentOperation = self.queue.firstObject;
+                if (self.queue.count == 1) {
+                    // one action is already taking place: Show or Hide
+                    // add if it's the opposite action
+                    if (currentOperation.type != newOperation.type) {
+                        [self.queue addObject:newOperation];
+                    }
                 } else {
-                    //noop: we are adding a redundant operation: Hide,Show <- Show === Hide,Show
+                    //more than one action in the queue: Hide,Show or Show,Hide
+                    if (currentOperation.type == newOperation.type) {
+                        // remove the opposite action and do not add the new action, as it's the same
+                        // Hide,Show <- Hide === Hide
+                        [self.queue removeObjectAtIndex:1];
+                    } else {
+                        //noop: we are adding a redundant operation: Hide,Show <- Show === Hide,Show
+                    }
                 }
             }
+            
+            T21PullToRefreshOperation * lastOp = self.queue.lastObject;
+            if (lastOp) {
+                self.lastState = lastOp.type;
+            }
         }
+        
+//        NSLog(@"OPERATION COUNT: %d",self.queue.count);
+//        NSLog(@"ADD OPERATION FINISHES");
     }
 }
 
 -(void)executeOperation:(T21PullToRefreshOperation*)operation {
     
+//    NSLog(@"EXECUTE OPERATION STARTS");
     if (operation.type == T21PullToRefreshOperationTypeShow) {
         [self executeDelayed:0.2 block:^{
             if (operation.wasForcedProgramatically) {
@@ -260,6 +275,7 @@ typedef enum T21PullToRefreshOperationType {
                 }
             }
             [self executeDelayed:0.5 block:^{
+//                NSLog(@"EXECUTE OPERATION FINISHES");
                 [self finishOperation];
             }];
         }];
@@ -267,6 +283,7 @@ typedef enum T21PullToRefreshOperationType {
         [self executeDelayed:0.2 block:^{
             [self.refreshControl endRefreshing];
             [self executeDelayed:0.5 block:^{
+//                NSLog(@"EXECUTE OPERATION FINISHES");
                 [self finishOperation];
             }];
         }];
@@ -281,6 +298,7 @@ typedef enum T21PullToRefreshOperationType {
 
 -(void)finishOperation {
     @synchronized (self) {
+//        NSLog(@"FINISH OPERATION STARTS");
         if (self.queue.count > 0) {
             [self.queue removeObjectAtIndex:0];
             if (self.queue.count > 0) {

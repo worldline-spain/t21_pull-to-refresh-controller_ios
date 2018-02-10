@@ -32,7 +32,7 @@
 
 - (void) resetPullToRefreshAnimation
 {
-    [[T21PullToRefreshController getInstance] resetPullToRefreshAnimation:self];
+    [[T21PullToRefreshController getInstance] finishPullToRefreshAnimation:self];
 }
 
 - (void) finishPullToRefreshAnimation {

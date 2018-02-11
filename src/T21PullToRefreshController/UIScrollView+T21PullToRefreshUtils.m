@@ -32,7 +32,7 @@
 
 - (void) resetPullToRefreshAnimation
 {
-    [[T21PullToRefreshController getInstance] resetPullToRefreshAnimation:self];
+    [[T21PullToRefreshController getInstance] finishPullToRefreshAnimation:self];
 }
 
 - (void) finishPullToRefreshAnimation {
@@ -40,11 +40,11 @@
 }
 
 - (BOOL) isPullToRefreshAnimating {
-    [[T21PullToRefreshController getInstance] isPullToRefreshAnimating:self];
+    return [[T21PullToRefreshController getInstance] isPullToRefreshAnimating:self];
 }
 
 - (BOOL) hasPullToRefreshController {
-    [[T21PullToRefreshController getInstance] hasPullToRefresh:self];
+    return [[T21PullToRefreshController getInstance] hasPullToRefresh:self];
 }
 
 #pragma mark - Pull to refresh by code
